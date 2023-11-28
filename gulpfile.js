@@ -1,13 +1,34 @@
 const replace = require('gulp-replace');
 const { src, dest } = require('gulp');
 
+/**
+ * Options that may be set via cli flags \
+ * For example: \
+ * `npx gulp migrate  --src "./src-dir" --overwrite --verbose` */
+const DEFAULT_OPTIONS = {
+  /** string that will be passed to the gulp {@link src} function */
+  src: 'src/*.{asp,hbs,html,htm,php,vue}',
+  /** string that will be passed to the gulp {@link dest} function */
+  dest: 'dest/',
+  /** overwrite the existing files in place. **Cannot be used with --dest flag** */
+  overwrite: false,
+  /** print the path of each generated / modified file to the console */
+  verbose: false,
+};
+
 function migrate() {
+  const options = parseArgs();
+
+  console.log(parseArgs())
+  process.exit(0)
+
   let dataAttrChanged = 0;
   let CDNLinksChanged = 0;
   let cssClassChanged = 0;
 
   return (
-    src(['src/*.{asp,hbs,html,htm,php,vue}'])
+    /** when overwrite flag is true, set base option */
+    src([options.src], { base: options.overwrite ? './' : undefined })
       // CDNJS CSS
       .pipe(
         replace(
@@ -668,11 +689,52 @@ function migrate() {
       .pipe(replace(/<select([^>]*)\bclass=['"]([^'"]*)form-control(-lg|-sm)?([^'"]*)['"]([^>]*)>/g, '<select$1class="$2form-select$3$4"$5>'))
       .pipe(replace(/<select([^>]*)\bclass=['"]([^'"]*)form-control\b([^'"]*['"])/g, '<select$1class="$2form-select$3'))
       .pipe(replace('<span aria-hidden="true">&times;</span>', ''))
-      .pipe(dest('dest/'))
+      .pipe(dest(options.dest))
+      .on('data', (data) => {
+        if (options.verbose) {
+          console.log(`Wrote file: ${data.path}`);
+        }
+      })
       .on('end', function () {
         console.log(`Completed! Changed ${cssClassChanged} CSS class names, ${dataAttrChanged} data-attributes and ${CDNLinksChanged} CDN links.`);
       })
   );
+}
+
+/** parses cli args array and return an options object */
+function parseArgs() {
+  const options = Object.assign({}, DEFAULT_OPTIONS);
+
+  const argv = process.argv;
+  argv.forEach((flag, i) => {
+    const value = argv[i + 1];
+    switch (flag) {
+      case '--src': {
+        options.src = value;
+        break;
+      }
+      case '--dest': {
+        options.dest = value;
+        break;
+      }
+      case '--overwrite': {
+        options.overwrite = true;
+        options.dest = './';
+        if (argv.includes('--dest')) {
+          throw new Error('Cannot use --overwrite and --dest options together.');
+        }
+        break;
+      }
+      case '--verbose': {
+        options.verbose = true;
+        break;
+      }
+
+      default:
+        break;
+    }
+  });
+  return options;
 }
 
 exports.migrate = migrate;
